@@ -15,12 +15,35 @@ function detection
                              % deviation(sigma) of background
     end
     %imshow(miu);
-    
-    frm1 = read(video_obj, 1);
-    imshow(get_brightness_img(frm1));
-    img = get_body(frm1);
-    figure;
-    imshow(img);
+    for k = 785 : 786
+        frm1 = read(video_obj, k);
+        bimg = get_brightness_img(frm1);
+%         figure;
+%         imshow(bimg);
+        Fimg = get_foreground(bimg);
+%         figure;
+%         imshow(Fimg);
+
+        body = get_body(Fimg);
+%         figure;
+%         imshow(body);
+
+        [num, body_states] = get_ellipse(body, Fimg);
+        if num == 1
+            fly_ctrs = double(body);
+            for i = -1 : 1
+                for j = -1 : 1
+                    fly_ctrs(body_states(1).r + i, body_states(1).c + j) = 0.5;
+                    fly_ctrs(body_states(2).r + i, body_states(2).c + j) = 0.5;
+                end
+            end
+            figure;
+            imshow(fly_ctrs);
+        end
+        wings = get_wings(Fimg);
+        figure;
+        imshow(wings);
+    end
 end
 
 %%
@@ -50,10 +73,7 @@ function img_out = get_brightness_img(frm)
 end
 
 %%
-function img_out = get_body(frm)
-    Fimg = get_foreground(frm);
-    figure;
-    imshow(Fimg);
+function img_out = get_body(Fimg)
     [m, n] = size(Fimg);
     X = Fimg(:);
     [~, C] = kmeans(X, 3);
@@ -78,24 +98,17 @@ function img_out = get_body(frm)
     funcb = [model.Miu(1), model.Sigma(1), model.Pi(1)];
     funca = [model.Miu(2), model.Sigma(2), model.Pi(2)];
     threshold = find_intersection(funca, funcb);
-    threshold = max(threshold, model.Miu(1) - 3 * model.Sigma(1));
+%     threshold = max(threshold, model.Miu(1) - 3 * model.Sigma(1));
     
     img_out = zeros(m, n);
-    for x = 1 : m;
-        for y = 1 : n;
-            if Fimg(x,y) > threshold
-                img_out(x,y) = 1;
-            end
-        end
-    end
-        
+    img_out(Fimg > threshold) = 1;
+    img_out = bwareaopen(img_out, 256, 4);
 end
 
-function fore_img = get_foreground(frm)
+function fore_img = get_foreground(bimg)
     global miu;
     global sigma;
-    frm = get_brightness_img(frm);
-    fore_img = 1 - frm ./ (miu + 3 * sigma);
+    fore_img = 1 - bimg ./ (miu + 3 * sigma);
 end
 
 function sln = find_intersection(pa, pb)
@@ -122,4 +135,58 @@ function sln = find_intersection(pa, pb)
     end
     sln = mid;
 end
+
+%%
+function [lnum, body_sts] = get_ellipse(body, Fimg)
+    [img_label, lnum] = bwlabel(body);
+    
+    if lnum == 1
+        Fimg(body == 0) = 0;
+        [row, col, val] = find(Fimg);
+%         max_r = max(row);
+%         min_r = min(row);
+%         max_c = max(col);
+%         min_c = min(col);
+%         row = mapminmax(row');
+%         col = mapminmax(col');
+%         val = mapminmax(val');
+%         X = [row', col', val'];
+        X = [row, col, val];
+        
+        [~, C] = kmeans(X, 2);
+        [~, model] = gmm(X, C);
+        body_sts(1).r = round(model.Miu(1,1));
+        body_sts(1).c = round(model.Miu(1,2));
+        body_sts(2).r = round(model.Miu(2,1));
+        body_sts(2).c = round(model.Miu(2,2));
+        
+%         body_sts(1).r = round(get_back(model.Miu(1,1), min_r, max_r));
+%         body_sts(1).c = round(get_back(model.Miu(1,2), min_c, max_c));
+%         body_sts(2).r = round(get_back(model.Miu(2,1), min_r, max_r));
+%         body_sts(2).c = round(get_back(model.Miu(2,2), min_c, max_c));
+%         body_sts(1).r = round(get_back(C(1,1), min_r, max_r));
+%         body_sts(1).c = round(get_back(C(1,2), min_c, max_c));
+%         body_sts(2).r = round(get_back(C(2,1), min_r, max_r));
+%         body_sts(2).c = round(get_back(C(2,2), min_c, max_c));
+    else
+        body_sts = regionprops(img_label, 'Centroid', 'Orientation',...
+            'MajorAxisLength', 'MinorAxisLength');
+    end
+    
+end
+
+function y = get_back(x, min, max)
+    y = (x + 1) * (max - min) / 2 + min;
+end
+
+%%
+function wings = get_wings(Fimg)
+    threshs = multithresh(Fimg, 2);
+    imth = imquantize(Fimg, threshs);
+    wings = Fimg;
+    wings(imth == 1) = 0;
+    wings(imth == 2) = 0.5;
+    wings(imth == 3) = 1;
+end
+
 

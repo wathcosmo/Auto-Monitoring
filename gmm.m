@@ -55,7 +55,7 @@ function varargout = gmm(X, K_or_centroids)
             else
                 Xshift = X-repmat(pMiu(kk, :), N, 1);
                 pSigma(:, :, kk) = (Xshift' * ...
-                    (diag(pGamma(:, kk)) * Xshift)) / Nk(kk);
+                    (sparse(diag(pGamma(:, kk))) * Xshift)) / Nk(kk);
             end
         end
  
@@ -117,12 +117,12 @@ function varargout = gmm(X, K_or_centroids)
             if D == 1
                 kSigma = pSigma(k);
                 tmp = sum((Xshift/kSigma) .* Xshift, 2);
-                coef = (2*pi)^(-D/2) * sqrt(det(kSigma));
+                coef = (2*pi)^(-D/2) / sqrt(det(kSigma));
                 Px(:, k) = coef * exp(-0.5*tmp);
             else
                 kSigma = pSigma(:, :, k);
                 tmp = sum((Xshift/kSigma) .* Xshift, 2);
-                coef = (2*pi)^(-D/2) * sqrt(det(kSigma));
+                coef = (2*pi)^(-D/2) / sqrt(det(kSigma));
                 Px(:, k) = coef * exp(-0.5*tmp);
             end
         end
